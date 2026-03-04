@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Application.Features.Admin
+namespace Application.Features.Admin.Dtos
 {
     public class VacationBalanceDto
     {
