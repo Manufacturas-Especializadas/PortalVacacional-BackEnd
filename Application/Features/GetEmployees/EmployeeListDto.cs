@@ -8,6 +8,8 @@ namespace Application.Features.GetEmployees
 {
     public class EmployeeListDto
     {
+        public int Id { get; set; }
+
         public int PayRollNumber { get; set; }
 
         public string FullName { get; set; }
