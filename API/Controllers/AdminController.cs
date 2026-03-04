@@ -11,12 +11,51 @@ namespace API.Controllers
     public class AdminController : ControllerBase
     {
         private readonly IEmployeeImportService _importService;
+        private readonly IEmployeeService _employeeService;
         private readonly AppDbContext _context;
 
-        public AdminController(IEmployeeImportService importService, AppDbContext context)
+        public AdminController(
+            IEmployeeImportService importService,
+            IEmployeeService employeeService,
+            AppDbContext context)
         {
             _importService = importService;
+            _employeeService = employeeService;
             _context = context;
+        }
+
+        [HttpPatch]
+        [Route("employees/{id}")]
+        public async Task<IActionResult> UpdateEmployee(int id,[FromBody] UpdateEmployeeDto dto)
+        {
+            if (id != dto.Id)
+            {
+                return BadRequest("El ID del empleado no coincide con la petición.");
+            }
+
+            try
+            {
+                var success = await _employeeService.UpdateEmployeeAsync(dto);
+                if (!success) return NotFound($"No se encontró el empleado.");
+
+                return Ok(new { message = "Empleado actualizado correctamente" });
+            }
+            catch (DbUpdateException ex)
+            {
+                var innerMessage = ex.InnerException?.Message ?? ex.Message;
+
+                return BadRequest(new { message = innerMessage });
+            }
+        }
+
+        [HttpDelete]
+        [Route("employees/{payrollNumber}")]
+        public async Task<IActionResult> DeleteEmployee(int payrollNumber)
+        {
+            var success = await _employeeService.DeleteEmployeeAsync(payrollNumber);
+            if (!success) return NotFound();
+
+            return Ok(new { message = "Empleado desactivado del sistema" });
         }
 
         [HttpGet]
@@ -29,6 +68,7 @@ namespace API.Controllers
                     .Where(u => u.Role.Name == "Employee")
                      .Select(u => new EmployeeListDto
                      {
+                         Id = u.Id,
                          PayRollNumber = u.PayRollNumber,
                          FullName = u.FullName,
                          Department = u.EmployeeProfile != null && u.EmployeeProfile.Department != null
