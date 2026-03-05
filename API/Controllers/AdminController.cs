@@ -98,7 +98,8 @@ namespace API.Controllers
                         : 0,
 
                          TotalVacationDays = u.VacationBalances
-                            .Sum(v => (decimal)(v.AssignedDays - v.UsedDays))
+                            .Sum(v => (decimal)(v.AssignedDays - v.UsedDays)),
+                         IsActive = u.IsActive
                      })
                     .ToListAsync();
 

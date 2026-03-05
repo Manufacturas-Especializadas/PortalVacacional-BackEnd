@@ -19,5 +19,7 @@ namespace Application.Features.GetEmployees
         public int YearsOfService { get; set; }
 
         public decimal TotalVacationDays { get; set; }
+
+        public bool IsActive { get; set; }
     }
 }
