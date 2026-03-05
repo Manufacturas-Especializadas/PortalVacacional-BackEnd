@@ -76,6 +76,31 @@ namespace API.Controllers
             return Ok(new { message = "Empleado desactivado del sistema" });
         }
 
+        [HttpPatch]
+        [Route("reactivateEmployee/{id}")]
+        public async Task<IActionResult> ReactivateEmployee(int id)
+        {
+            try
+            {
+                var success = await _employeeService.ReactivateEmployeeAsync(id);
+
+                if(!success) return NotFound(new 
+                    { message = "No se encontro el colaborador para reactivar" });
+
+                return Ok(new
+                {
+                    message = "Colaborador reactivado correctamente"
+                });
+            }
+            catch(Exception ex)
+            {
+                return BadRequest(new
+                {
+                    message = "Error al intentar reactivar al empleado: " + ex.Message
+                });
+            }
+        }
+
         [HttpGet]
         [Route("employees")]
         public async Task<IActionResult> GetEmployees()

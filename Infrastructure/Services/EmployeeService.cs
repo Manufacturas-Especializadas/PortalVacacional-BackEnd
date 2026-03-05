@@ -155,6 +155,19 @@ namespace Infrastructure.Services
             return true;
         }
 
+        public async Task<bool> ReactivateEmployeeAsync(int id)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+
+            if (user == null) return false;
+
+            user.IsActive = true;
+
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
+
         private int CalculateVacationDays(int years)
         {
             if (years < 1) return 0;
