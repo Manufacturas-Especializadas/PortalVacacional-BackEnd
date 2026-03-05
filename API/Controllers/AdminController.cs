@@ -67,10 +67,10 @@ namespace API.Controllers
         }
 
         [HttpDelete]
-        [Route("employees/{payrollNumber}")]
-        public async Task<IActionResult> DeleteEmployee(int payrollNumber)
+        [Route("deleteEmployees/{id}")]
+        public async Task<IActionResult> DeleteEmployee(int id)
         {
-            var success = await _employeeService.DeleteEmployeeAsync(payrollNumber);
+            var success = await _employeeService.DeleteEmployeeAsync(id);
             if (!success) return NotFound();
 
             return Ok(new { message = "Empleado desactivado del sistema" });

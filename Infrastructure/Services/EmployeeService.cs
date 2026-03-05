@@ -143,14 +143,13 @@ namespace Infrastructure.Services
             return true;
         }
 
-        public async Task<bool> DeleteEmployeeAsync(int payrollNumber)
+        public async Task<bool> DeleteEmployeeAsync(int id)
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.PayRollNumber == payrollNumber);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
 
             if (user == null) return false;
 
             user.IsActive = false;
-
             await _context.SaveChangesAsync();
 
             return true;

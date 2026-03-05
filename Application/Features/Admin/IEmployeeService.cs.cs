@@ -13,6 +13,6 @@ namespace Application.Features.Admin
 
         Task<bool> UpdateEmployeeAsync(UpdateEmployeeDto dto);
 
-        Task<bool> DeleteEmployeeAsync(int payrollNumber);
+        Task<bool> DeleteEmployeeAsync(int id);
     }
 }
