@@ -9,6 +9,8 @@ namespace Application.Features.Admin
 {
     public interface IEmployeeService
     {
+        Task<int> CreateEmployeeAsync(CreateEmployeeDto dto);
+
         Task<bool> UpdateEmployeeAsync(UpdateEmployeeDto dto);
 
         Task<bool> DeleteEmployeeAsync(int payrollNumber);

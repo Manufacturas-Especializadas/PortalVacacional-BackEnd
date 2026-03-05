@@ -25,6 +25,23 @@ namespace API.Controllers
             _context = context;
         }
 
+        [HttpPost]
+        [Route("createEmployees")]
+        public async Task<IActionResult> CreateEmployee([FromBody] CreateEmployeeDto dto)
+        {
+            try
+            {
+                var newId = await _employeeService.CreateEmployeeAsync(dto);
+
+                return CreatedAtAction(nameof(GetEmployees), new { id = newId },
+                        new { message = "Empleado registrado con éxito", id = newId });
+            }
+            catch(Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpPatch]
         [Route("employees/{id}")]
         public async Task<IActionResult> UpdateEmployee(int id,[FromBody] UpdateEmployeeDto dto)
