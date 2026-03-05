@@ -1,6 +1,9 @@
 ﻿using Application.Features.Admin;
-using Microsoft.AspNetCore.Http;
+using Application.Features.Admin.Dtos;
+using Application.Features.GetEmployees;
+using Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace API.Controllers
 {
@@ -9,10 +12,123 @@ namespace API.Controllers
     public class AdminController : ControllerBase
     {
         private readonly IEmployeeImportService _importService;
+        private readonly IEmployeeService _employeeService;
+        private readonly AppDbContext _context;
 
-        public AdminController(IEmployeeImportService importService)
+        public AdminController(
+            IEmployeeImportService importService,
+            IEmployeeService employeeService,
+            AppDbContext context)
         {
             _importService = importService;
+            _employeeService = employeeService;
+            _context = context;
+        }
+
+        [HttpPost]
+        [Route("createEmployees")]
+        public async Task<IActionResult> CreateEmployee([FromBody] CreateEmployeeDto dto)
+        {
+            try
+            {
+                var newId = await _employeeService.CreateEmployeeAsync(dto);
+
+                return CreatedAtAction(nameof(GetEmployees), new { id = newId },
+                        new { message = "Empleado registrado con éxito", id = newId });
+            }
+            catch(Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPatch]
+        [Route("employees/{id}")]
+        public async Task<IActionResult> UpdateEmployee(int id,[FromBody] UpdateEmployeeDto dto)
+        {
+            if (id != dto.Id)
+            {
+                return BadRequest("El ID del empleado no coincide con la petición.");
+            }
+
+            try
+            {
+                var success = await _employeeService.UpdateEmployeeAsync(dto);
+                if (!success) return NotFound($"No se encontró el empleado.");
+
+                return Ok(new { message = "Empleado actualizado correctamente" });
+            }
+            catch (DbUpdateException ex)
+            {
+                var innerMessage = ex.InnerException?.Message ?? ex.Message;
+
+                return BadRequest(new { message = innerMessage });
+            }
+        }
+
+        [HttpDelete]
+        [Route("deleteEmployees/{id}")]
+        public async Task<IActionResult> DeleteEmployee(int id)
+        {
+            var success = await _employeeService.DeleteEmployeeAsync(id);
+            if (!success) return NotFound();
+
+            return Ok(new { message = "Empleado desactivado del sistema" });
+        }
+
+        [HttpPatch]
+        [Route("reactivateEmployee/{id}")]
+        public async Task<IActionResult> ReactivateEmployee(int id)
+        {
+            try
+            {
+                var success = await _employeeService.ReactivateEmployeeAsync(id);
+
+                if(!success) return NotFound(new 
+                    { message = "No se encontro el colaborador para reactivar" });
+
+                return Ok(new
+                {
+                    message = "Colaborador reactivado correctamente"
+                });
+            }
+            catch(Exception ex)
+            {
+                return BadRequest(new
+                {
+                    message = "Error al intentar reactivar al empleado: " + ex.Message
+                });
+            }
+        }
+
+        [HttpGet]
+        [Route("employees")]
+        public async Task<IActionResult> GetEmployees()
+        {
+            var currentYear = DateTime.UtcNow.Year;
+
+            var employees = await _context.Users
+                    .Where(u => u.Role.Name == "Employee")
+                     .Select(u => new EmployeeListDto
+                     {
+                         Id = u.Id,
+                         PayRollNumber = u.PayRollNumber,
+                         FullName = u.FullName,
+                         Department = u.EmployeeProfile != null && u.EmployeeProfile.Department != null
+                        ? u.EmployeeProfile.Department.Name
+                        : "Sin departamento",
+
+                                 YearsOfService = u.EmployeeProfile != null && u.EmployeeProfile.HireDate != null
+                        ? currentYear - u.EmployeeProfile.HireDate.Year
+                        : 0,
+
+                         TotalVacationDays = u.VacationBalances
+                            .Sum(v => (decimal)(v.AssignedDays - v.UsedDays)),
+                         IsActive = u.IsActive
+                     })
+                    .ToListAsync();
+
+            return Ok(employees);
         }
 
         [HttpPost]
