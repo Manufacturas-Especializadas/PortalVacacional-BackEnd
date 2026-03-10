@@ -25,6 +25,36 @@ namespace API.Controllers
             _context = context;
         }
 
+        [HttpGet]
+        [Route("employees")]
+        public async Task<IActionResult> GetEmployees()
+        {
+            var currentYear = DateTime.UtcNow.Year;
+
+            var employees = await _context.Users
+                    .Where(u => u.Role.Name == "Employee")
+                     .Select(u => new EmployeeListDto
+                     {
+                         Id = u.Id,
+                         PayRollNumber = u.PayRollNumber,
+                         FullName = u.FullName,
+                         Department = u.EmployeeProfile != null && u.EmployeeProfile.Department != null
+                        ? u.EmployeeProfile.Department.Name
+                        : "Sin departamento",
+
+                         YearsOfService = u.EmployeeProfile != null && u.EmployeeProfile.HireDate != null
+                        ? currentYear - u.EmployeeProfile.HireDate.Year
+                        : 0,
+
+                         TotalVacationDays = u.VacationBalances
+                            .Sum(v => (decimal)(v.AssignedDays - v.UsedDays)),
+                         IsActive = u.IsActive
+                     })
+                    .ToListAsync();
+
+            return Ok(employees);
+        }
+
         [HttpPost]
         [Route("createEmployees")]
         public async Task<IActionResult> CreateEmployee([FromBody] CreateEmployeeDto dto)
@@ -66,16 +96,6 @@ namespace API.Controllers
             }
         }
 
-        [HttpDelete]
-        [Route("deleteEmployees/{id}")]
-        public async Task<IActionResult> DeleteEmployee(int id)
-        {
-            var success = await _employeeService.DeleteEmployeeAsync(id);
-            if (!success) return NotFound();
-
-            return Ok(new { message = "Empleado desactivado del sistema" });
-        }
-
         [HttpPatch]
         [Route("reactivateEmployee/{id}")]
         public async Task<IActionResult> ReactivateEmployee(int id)
@@ -84,51 +104,21 @@ namespace API.Controllers
             {
                 var success = await _employeeService.ReactivateEmployeeAsync(id);
 
-                if(!success) return NotFound(new 
-                    { message = "No se encontro el colaborador para reactivar" });
+                if (!success) return NotFound(new
+                { message = "No se encontro el colaborador para reactivar" });
 
                 return Ok(new
                 {
                     message = "Colaborador reactivado correctamente"
                 });
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 return BadRequest(new
                 {
                     message = "Error al intentar reactivar al empleado: " + ex.Message
                 });
             }
-        }
-
-        [HttpGet]
-        [Route("employees")]
-        public async Task<IActionResult> GetEmployees()
-        {
-            var currentYear = DateTime.UtcNow.Year;
-
-            var employees = await _context.Users
-                    .Where(u => u.Role.Name == "Employee")
-                     .Select(u => new EmployeeListDto
-                     {
-                         Id = u.Id,
-                         PayRollNumber = u.PayRollNumber,
-                         FullName = u.FullName,
-                         Department = u.EmployeeProfile != null && u.EmployeeProfile.Department != null
-                        ? u.EmployeeProfile.Department.Name
-                        : "Sin departamento",
-
-                                 YearsOfService = u.EmployeeProfile != null && u.EmployeeProfile.HireDate != null
-                        ? currentYear - u.EmployeeProfile.HireDate.Year
-                        : 0,
-
-                         TotalVacationDays = u.VacationBalances
-                            .Sum(v => (decimal)(v.AssignedDays - v.UsedDays)),
-                         IsActive = u.IsActive
-                     })
-                    .ToListAsync();
-
-            return Ok(employees);
         }
 
         [HttpPost]
@@ -154,5 +144,15 @@ namespace API.Controllers
                 });
             }
         }
+
+        [HttpDelete]
+        [Route("deleteEmployees/{id}")]
+        public async Task<IActionResult> DeleteEmployee(int id)
+        {
+            var success = await _employeeService.DeleteEmployeeAsync(id);
+            if (!success) return NotFound();
+
+            return Ok(new { message = "Empleado desactivado del sistema" });
+        }                        
     }
 }
