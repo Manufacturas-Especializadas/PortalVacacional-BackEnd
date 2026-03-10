@@ -19,5 +19,7 @@ namespace Application.Features.Admin
         Task<bool> DeleteEmployeeAsync(int id);
 
         Task<bool> ReactivateEmployeeAsync(int id);
+
+        Task<bool> RequestVacationAsync(int userId, CreateVacationRequestDto dto);
     }
 }
