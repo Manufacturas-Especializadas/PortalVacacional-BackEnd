@@ -15,5 +15,7 @@ namespace Application.Dtos.Auth
         public string Role {  get; set; } = null!;
 
         public bool MustChangePassword { get; set; }
+
+        public string Email { get; set; }
     }
 }
