@@ -72,6 +72,30 @@ namespace API.Controllers
             }
         }
 
+        [HttpPost]
+        [Route("import-employees")]
+        public async Task<IActionResult> ImportEmployees(IFormFile file)
+        {
+            try
+            {
+                if (file == null || file.Length == 0)
+                    return BadRequest("Invalid file");
+
+                using var stream = file.OpenReadStream();
+
+                var result = await _importService.ImportAsync(stream, 2);
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    message = ex.InnerException?.Message ?? ex.Message
+                });
+            }
+        }
+
         [HttpPatch]
         [Route("employees/{id}")]
         public async Task<IActionResult> UpdateEmployee(int id,[FromBody] UpdateEmployeeDto dto)
@@ -117,30 +141,6 @@ namespace API.Controllers
                 return BadRequest(new
                 {
                     message = "Error al intentar reactivar al empleado: " + ex.Message
-                });
-            }
-        }
-
-        [HttpPost]
-        [Route("import-employees")]
-        public async Task<IActionResult> ImportEmployees(IFormFile file)
-        {
-            try
-            {
-                if (file == null || file.Length == 0)
-                    return BadRequest("Invalid file");
-
-                using var stream = file.OpenReadStream();
-
-                var result = await _importService.ImportAsync(stream, 2);
-
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new
-                {
-                    message = ex.InnerException?.Message ?? ex.Message
                 });
             }
         }
