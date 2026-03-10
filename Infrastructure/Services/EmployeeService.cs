@@ -1,5 +1,6 @@
 ﻿using Application.Features.Admin;
 using Application.Features.Admin.Dtos;
+using Application.Features.Employee.Dtos;
 using Core.Entities;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,40 @@ namespace Infrastructure.Services
         private readonly AppDbContext _context;
 
         public EmployeeService(AppDbContext context) => _context = context;
+
+        public async Task<EmployeeDashboardDto> GetDashboardDataAsync(int userId)
+        {
+            var currentYear = DateTime.Now.Year;
+
+            var balances = await _context.VacationBalances
+                .Where(v => v.UserId == userId)
+                .ToListAsync();
+
+            int totalAssigned = balances.Sum(b => b.AssignedDays);
+            int totalUsed = balances.Sum(b => b.UsedDays);
+
+            var history = await _context.VacationRequests
+                .Include(r => r.Status)
+                .Where(r => r.UserId == userId)
+                .OrderByDescending(r => r.CreatedAt)
+                .Select(r => new VacationRequestDto
+                {
+                    Id = r.Id,
+                    StartDate = r.StartDate.ToString("dd MMM yyyy"),
+                    EndDate = r.EndDate.ToString("dd MMM yyyy"),
+                    Days = r.RequestedDays,
+                    Status = r.Status.Name
+                })
+                .Take(5)
+                .ToListAsync();
+
+            return new EmployeeDashboardDto
+            {
+                TotalDays = totalAssigned,
+                UsedDays = totalUsed,
+                History = history
+            };
+        }
 
         public async Task<int> CreateEmployeeAsync(CreateEmployeeDto dto)
         {
