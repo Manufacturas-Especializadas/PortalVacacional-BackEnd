@@ -25,8 +25,8 @@ namespace Infrastructure.Services
         public async Task<LoginResponse> LoginAsync(LoginRequest request)
         {
             var user = await _context.Users
-                .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.PayRollNumber == request.PayRollNumber);
+                    .Include(u => u.Role)
+                    .FirstOrDefaultAsync(u => u.PayRollNumber == request.PayRollNumber);
 
             if (user == null)
                 throw new Exception("User not found");
@@ -43,7 +43,8 @@ namespace Infrastructure.Services
                 Token = token,
                 FullName = user.FullName,
                 Role = user.Role.Name,
-                MustChangePassword = user.MustChangePassword
+                MustChangePassword = user.MustChangePassword,
+                Email = user.Email!
             };
         }
 
