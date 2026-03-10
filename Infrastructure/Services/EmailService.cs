@@ -49,6 +49,6 @@ namespace Infrastructure.Services
             };
 
             await client.SendMailAsync(mailMeesage);
-        }
+        }        
     }
 }
