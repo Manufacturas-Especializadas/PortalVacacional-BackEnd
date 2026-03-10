@@ -1,5 +1,6 @@
 ﻿using Application.Features.Admin;
 using Application.Features.Admin.Dtos;
+using Application.Features.Email;
 using Application.Features.Employee.Dtos;
 using Core.Entities;
 using Infrastructure.Data;
@@ -15,8 +16,13 @@ namespace Infrastructure.Services
     public class EmployeeService : IEmployeeService
     {
         private readonly AppDbContext _context;
+        private readonly IEmailService _emailService;
 
-        public EmployeeService(AppDbContext context) => _context = context;
+        public EmployeeService(AppDbContext context, IEmailService emailService)
+        {
+            _context = context;
+            _emailService = emailService;
+        }
 
         public async Task<EmployeeDashboardDto> GetDashboardDataAsync(int userId)
         {
@@ -199,6 +205,60 @@ namespace Infrastructure.Services
             user.IsActive = true;
 
             await _context.SaveChangesAsync();
+
+            return true;
+        }
+
+        public async Task<bool> RequestVacationAsync(int userId, CreateVacationRequestDto dto)
+        {
+            var employee = await _context.Users
+                    .Include(u => u.EmployeeProfile)
+                    .ThenInclude(p => p.Manager)
+                    .FirstOrDefaultAsync(u => u.Id == userId);
+
+            if (employee?.EmployeeProfile?.Manager == null)
+                throw new Exception("No se encontró un jefe directo asignado");
+
+            var balance = await _context.VacationBalances
+                        .Where(b => b.UserId == userId && b.Year == DateTime.Now.Year)
+                        .FirstOrDefaultAsync();
+
+            if (balance == null || (balance.AssignedDays - balance.UsedDays) < dto.RequestedDays)
+                throw new Exception("Días insuficientes en el balance");
+
+            var request = new VacationRequest
+            {
+                UserId = userId,
+                StartDate = dto.StartDate,
+                EndDate = dto.EndDate,
+                RequestedDays = dto.RequestedDays,
+                StatusId = 1
+            };
+
+            _context.VacationRequests.Add(request);
+            await _context.SaveChangesAsync();
+
+            var approvel = new VacationRequestApproval
+            {
+                VacationRequestId = request.Id,
+                ApproverId = employee.EmployeeProfile.ManagerId!.Value,
+                ApprovalLevel = 1,
+                StatusId = 1
+            };
+
+            _context.VacationRequestApprovals.Add(approvel);
+            await _context.SaveChangesAsync();
+
+            string subject = "Nueva Solicitud de Vacaciones - MESA";
+
+            string body = $@"
+            <h3>Hola, {employee.EmployeeProfile.Manager.FullName}</h3>
+            <p>El colaborador <b>{employee.FullName}</b> ha solicitado <b>{dto.RequestedDays}</b> días de vacaciones.</p>
+            <p>Periodo: del {dto.StartDate:dd/MM/yyyy} al {dto.EndDate:dd/MM/yyyy}.</p>
+            <br>
+            <a href='https://tuportal.mesa.com/aprobaciones'>Haga clic aquí para revisar y autorizar</a>";
+
+            await _emailService.SendEmailAsync(new[] { employee.EmployeeProfile.Manager.Email }!, subject, body);
 
             return true;
         }
