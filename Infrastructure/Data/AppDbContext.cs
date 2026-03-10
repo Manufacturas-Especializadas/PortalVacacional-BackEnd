@@ -22,6 +22,8 @@ namespace Infrastructure.Data
 
         public DbSet<EmployeeProfile> EmployeeProfiles => Set<EmployeeProfile>();
 
+        public DbSet<VacationRequest> VacationRequests => Set<VacationRequest>();
+
         public DbSet<VacationBalance> VacationBalances => Set<VacationBalance>();
 
         public DbSet<VacationRequestApproval> VacationRequestApprovals => Set<VacationRequestApproval>();
@@ -134,6 +136,30 @@ namespace Infrastructure.Data
                 entity.HasOne(a => a.Approver)
                     .WithMany()
                     .HasForeignKey(a => a.ApproverId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<VacationRequest>(entity =>
+            {
+                entity.ToTable("VacationRequests");
+
+                entity.Property(v => v.StartDate).HasColumnName("startDate");
+                entity.Property(v => v.EndDate).HasColumnName("endDate");
+                entity.Property(v => v.RequestedDays).HasColumnName("requestedDays");
+                entity.Property(v => v.StatusId).HasColumnName("statusId");
+
+                entity.Property(v => v.CreatedAt)
+                    .HasDefaultValueSql("GETDATE()")
+                    .ValueGeneratedOnAdd();
+
+                entity.HasOne(v => v.User)
+                    .WithMany(u => u.VacationRequests)
+                    .HasForeignKey(v => v.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(v => v.Status)
+                    .WithMany()
+                    .HasForeignKey(v => v.StatusId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
