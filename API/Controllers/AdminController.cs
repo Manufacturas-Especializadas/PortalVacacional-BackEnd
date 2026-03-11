@@ -48,6 +48,8 @@ namespace API.Controllers
                          Id = u.Id,
                          PayRollNumber = u.PayRollNumber,
                          FullName = u.FullName,
+                         RoleId = u.RoleId,
+                         HireDate = u.EmployeeProfile!.HireDate,
                          Department = u.EmployeeProfile != null && u.EmployeeProfile.Department != null
                         ? u.EmployeeProfile.Department.Name
                         : "Sin departamento",
