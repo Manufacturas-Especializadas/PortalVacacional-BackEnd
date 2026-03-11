@@ -26,6 +26,16 @@ namespace API.Controllers
         }
 
         [HttpGet]
+        [Route("roles")]
+        public async Task<IActionResult> GetRoles()
+        {
+            var roles = await _context.Roles
+                .Select(r => new { r.Id, r.Name })
+                .ToListAsync();
+            return Ok(roles);
+        }
+
+        [HttpGet]
         [Route("employees")]
         public async Task<IActionResult> GetEmployees()
         {
