@@ -4,6 +4,7 @@ using Application.Features.GetEmployees;
 using Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Threading.Tasks.Sources;
 
 namespace API.Controllers
 {
@@ -65,6 +66,48 @@ namespace API.Controllers
                     .ToListAsync();
 
             return Ok(employees);
+        }
+
+        [HttpGet]
+        [Route("departmentHead-managers")]
+        public async Task<IActionResult> GetManagers()
+        {
+            var currentYear = DateTime.UtcNow.Year;
+
+            var managers = await _context.Managers
+                .Include(m => m.Role)
+                .Include(m => m.Department)
+                .Select(m => new {
+                    M = m,
+                    U = _context.Users
+                        .Include(u => u.EmployeeProfile)
+                        .Include(u => u.VacationBalances)
+                        .FirstOrDefault(u => u.PayRollNumber == m.PayRollNumber)
+                })
+                .Select(x => new
+                {
+                    Id = x.M.Id,
+                    PayRollNumber = x.M.PayRollNumber,
+                    FullName = x.M.FullName,
+                    Email = x.M.Email,
+                    RoleId = x.M.RoleId,
+                    RoleName = x.M.Role.Name,
+                    Department = x.M.Department.Name,
+                    DepartmentId = x.M.DepartmentId,
+                    YearsOfService = x.U != null && x.U.EmployeeProfile != null
+                        ? currentYear - x.U.EmployeeProfile.HireDate.Year
+                        : 0,
+                    HireDate = x.U != null && x.U.EmployeeProfile != null
+                        ? x.U.EmployeeProfile.HireDate
+                        : (DateTime?)null,
+                    TotalVacationDays = x.U != null
+                        ? x.U.VacationBalances.Sum(v => v.AssignedDays - v.UsedDays)
+                        : 0,
+                    IsActive = x.M.IsActive
+                })
+                .ToListAsync();
+
+            return Ok(managers);
         }
 
         [HttpPost]
