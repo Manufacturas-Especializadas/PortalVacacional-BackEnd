@@ -85,7 +85,8 @@ namespace Infrastructure.Services
             {
                 UserId = user.Id,
                 Department = department,
-                HireDate = dto.HireDate
+                HireDate = dto.HireDate,
+                ManagerId = dto.ManagerId,
             };
 
             _context.EmployeeProfiles.Add(profile);
@@ -180,6 +181,11 @@ namespace Infrastructure.Services
                             _context.Managers.Remove(managerEntry);
                         }
                     }
+                }
+
+                if(user.EmployeeProfile != null)
+                {
+                    user.EmployeeProfile.ManagerId = dto.ManagerId;
                 }
 
                 if (!string.IsNullOrWhiteSpace(dto.FullName))
