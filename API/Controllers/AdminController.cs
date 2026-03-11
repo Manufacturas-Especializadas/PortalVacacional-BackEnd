@@ -37,6 +37,16 @@ namespace API.Controllers
         }
 
         [HttpGet]
+        [Route("managersSelect")]
+        public async Task<IActionResult> GetManagersSelect()
+        {
+            var roles = await _context.Managers
+                .Select(r => new { r.Id, r.FullName })
+                .ToListAsync();
+            return Ok(roles);
+        }
+
+        [HttpGet]
         [Route("employees")]
         public async Task<IActionResult> GetEmployees()
         {
@@ -50,6 +60,7 @@ namespace API.Controllers
                          PayRollNumber = u.PayRollNumber,
                          FullName = u.FullName,
                          RoleId = u.RoleId,
+                         ManagerId = u.EmployeeProfile!.ManagerId,
                          HireDate = u.EmployeeProfile!.HireDate,
                          Department = u.EmployeeProfile != null && u.EmployeeProfile.Department != null
                         ? u.EmployeeProfile.Department.Name
