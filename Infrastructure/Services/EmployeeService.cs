@@ -114,74 +114,134 @@ namespace Infrastructure.Services
 
         public async Task<bool> UpdateEmployeeAsync(UpdateEmployeeDto dto)
         {
-            var user = await _context.Users
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var user = await _context.Users
                     .Include(u => u.EmployeeProfile)
                     .Include(u => u.VacationBalances)
                     .FirstOrDefaultAsync(u => u.Id == dto.Id);
 
-            if (user == null) return false;
+                if (user == null) return false;
 
-            if (dto.PayRollNumber.HasValue && dto.PayRollNumber > 0 && user.PayRollNumber != dto.PayRollNumber)
-            {
-                if (await _context.Users.AnyAsync(u => u.PayRollNumber == dto.PayRollNumber && u.Id != dto.Id))
-                    throw new Exception("El número de nómina ya existe.");
+                int oldRoleId = user.RoleId;
 
-                user.PayRollNumber = dto.PayRollNumber.Value;
-            }
-
-            if (!string.IsNullOrWhiteSpace(dto.FullName))
-                user.FullName = dto.FullName.Trim();
-
-            if (dto.IsActive.HasValue)
-                user.IsActive = dto.IsActive.Value;
-
-            if (!string.IsNullOrWhiteSpace(dto.Department) || dto.HireDate.HasValue)
-            {
-                if (user.EmployeeProfile == null)
+                if (dto.PayRollNumber.HasValue && dto.PayRollNumber > 0 && user.PayRollNumber != dto.PayRollNumber)
                 {
-                    user.EmployeeProfile = new EmployeeProfile { UserId = user.Id };
-                    _context.EmployeeProfiles.Add(user.EmployeeProfile);
+                    if (await _context.Users.AnyAsync(u => u.PayRollNumber == dto.PayRollNumber && u.Id != dto.Id))
+                        throw new Exception("El número de nómina ya existe.");
+
+                    user.PayRollNumber = dto.PayRollNumber.Value;
                 }
 
-                if (!string.IsNullOrWhiteSpace(dto.Department))
+                if (dto.RoleId.HasValue && dto.RoleId.Value != oldRoleId)
                 {
-                    var dept = await _context.Departments.FirstOrDefaultAsync(d => d.Name == dto.Department);
+                    user.RoleId = dto.RoleId.Value;
 
-                    if (dept == null)
+                    var authorityRoles = new List<int> { 3, 4 };
+                    bool isNowAuthority = authorityRoles.Contains(dto.RoleId.Value);
+                    bool wasAuthority = authorityRoles.Contains(oldRoleId);
+
+                    if (isNowAuthority)
                     {
-                        dept = new Department { Name = dto.Department, IsActive = true };
-                        _context.Departments.Add(dept);
-                        await _context.SaveChangesAsync();
+                        var managerEntry = await _context.Managers
+                            .FirstOrDefaultAsync(m => m.PayRollNumber == user.PayRollNumber);
+
+                        if (string.IsNullOrEmpty(user.Email))
+                        {
+                            throw new Exception("El empleado debe tener un correo electrónico configurado para ser asignado como Jefe/Gerente.");
+                        }
+
+                        if (managerEntry == null)
+                        {
+                            _context.Managers.Add(new Manager
+                            {
+                                PayRollNumber = user.PayRollNumber,
+                                FullName = user.FullName,
+                                Email = user.Email ?? "",
+                                DepartmentId = user.EmployeeProfile?.DepartmentId ?? 1,
+                                RoleId = dto.RoleId.Value,
+                                IsActive = true
+                            });
+                        }
+                        else
+                        {
+                            managerEntry.RoleId = dto.RoleId.Value;
+                            managerEntry.IsActive = true;
+                        }
+                    }
+                    else if (wasAuthority && !isNowAuthority)
+                    {
+                        var managerEntry = await _context.Managers
+                            .FirstOrDefaultAsync(m => m.PayRollNumber == user.PayRollNumber);
+
+                        if (managerEntry != null)
+                        {
+                            _context.Managers.Remove(managerEntry);
+                        }
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(dto.FullName))
+                    user.FullName = dto.FullName.Trim();
+
+                if (dto.IsActive.HasValue)
+                    user.IsActive = dto.IsActive.Value;
+
+                if (!string.IsNullOrWhiteSpace(dto.Department) || dto.HireDate.HasValue)
+                {
+                    if (user.EmployeeProfile == null)
+                    {
+                        user.EmployeeProfile = new EmployeeProfile { UserId = user.Id };
+                        _context.EmployeeProfiles.Add(user.EmployeeProfile);
                     }
 
-                    user.EmployeeProfile.DepartmentId = dept.Id;
-                }
+                    if (!string.IsNullOrWhiteSpace(dto.Department))
+                    {
+                        var dept = await _context.Departments.FirstOrDefaultAsync(d => d.Name == dto.Department);
 
-                if (dto.HireDate.HasValue && dto.HireDate != default)
-                {
-                    user.EmployeeProfile.HireDate = dto.HireDate.Value;
-                }
-            }
-
-            if (dto.Balances != null && dto.Balances.Any())
-            {
-                foreach (var bDto in dto.Balances)
-                {
-                    var existing = user.VacationBalances.FirstOrDefault(b => b.Year == bDto.Year);
-                    if (existing != null)
-                        existing.AssignedDays = bDto.AssignedDays;
-                    else
-                        user.VacationBalances.Add(new VacationBalance
+                        if (dept == null)
                         {
-                            Year = bDto.Year,
-                            AssignedDays = bDto.AssignedDays,
-                            UserId = user.Id
-                        });
-                }
-            }
+                            dept = new Department { Name = dto.Department, IsActive = true };
+                            _context.Departments.Add(dept);
+                            await _context.SaveChangesAsync();
+                        }
 
-            await _context.SaveChangesAsync();
-            return true;
+                        user.EmployeeProfile.DepartmentId = dept.Id;
+                    }
+
+                    if (dto.HireDate.HasValue && dto.HireDate != default)
+                    {
+                        user.EmployeeProfile.HireDate = dto.HireDate.Value;
+                    }
+                }
+
+                if (dto.Balances != null && dto.Balances.Any())
+                {
+                    foreach (var bDto in dto.Balances)
+                    {
+                        var existing = user.VacationBalances.FirstOrDefault(b => b.Year == bDto.Year);
+                        if (existing != null)
+                            existing.AssignedDays = bDto.AssignedDays;
+                        else
+                            user.VacationBalances.Add(new VacationBalance
+                            {
+                                Year = bDto.Year,
+                                AssignedDays = bDto.AssignedDays,
+                                UserId = user.Id
+                            });
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return true;
+            }
+            catch(Exception ex)
+            {
+                await transaction.RollbackAsync(); 
+                throw;
+            }
         }
 
         public async Task<bool> DeleteEmployeeAsync(int id)
