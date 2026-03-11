@@ -20,6 +20,8 @@ namespace Application.Features.Admin.Dtos
 
         public bool? IsActive { get; set; }
 
+        public int? RoleId { get; set; }
+
         public List<VacationBalanceDto>? Balances { get; set; }
     }
 }
