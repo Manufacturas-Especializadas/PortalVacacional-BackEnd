@@ -18,6 +18,8 @@ namespace Infrastructure.Data
 
         public DbSet<User> Users => Set<User>();
 
+        public DbSet<Manager> Managers => Set<Manager>();
+
         public DbSet<Department> Departments => Set<Department>();
 
         public DbSet<EmployeeProfile> EmployeeProfiles => Set<EmployeeProfile>();
@@ -43,18 +45,30 @@ namespace Infrastructure.Data
                     .ValueGeneratedOnAdd();
             });
 
+            modelBuilder.Entity<Manager>(entity =>
+            {
+                entity.ToTable("Managers");
+                entity.HasIndex(m => m.PayRollNumber).IsUnique();
+                entity.HasIndex(m => m.Email).IsUnique();
+
+                entity.Property(m => m.CreatedAt)
+                    .HasDefaultValueSql("GETDATE()")
+                    .ValueGeneratedOnAdd();
+
+                entity.HasOne(m => m.Department)
+                    .WithMany()
+                    .HasForeignKey(m => m.DepartmentId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Role)
+                   .WithMany()
+                   .HasForeignKey(e => e.RoleId)
+                   .OnDelete(DeleteBehavior.Restrict);
+            });
+
             modelBuilder.Entity<EmployeeProfile>(entity =>
             {
                 entity.ToTable("EmployeeProfiles");
-
-                entity.Property(e => e.DepartmentId)
-                    .HasColumnName("departmentId");
-
-                entity.Property(e => e.HireDate)
-                    .HasColumnName("hireDate");
-
-                entity.Property(e => e.ManagerId)
-                    .HasColumnName("ManagerId");
 
                 entity.HasOne(e => e.User)
                     .WithOne(u => u.EmployeeProfile)
@@ -128,6 +142,11 @@ namespace Infrastructure.Data
 
                 entity.Property(a => a.DecisionDate)
                     .HasColumnName("decisionDate");
+
+                entity.HasOne(a => a.Approver)
+                    .WithMany()
+                    .HasForeignKey(a => a.ApproverId)
+                    .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasOne(a => a.VacationRequest)
                     .WithMany(r => r.Approvals)
