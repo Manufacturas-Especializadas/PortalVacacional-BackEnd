@@ -1,6 +1,7 @@
 ﻿using Application.Features.Admin;
 using Application.Features.Admin.Dtos;
 using Application.Features.GetEmployees;
+using Application.Features.Managers.Dtos;
 using Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -42,7 +43,7 @@ namespace API.Controllers
         {
             var roles = await _context.Managers
                 .Select(r => new { r.Id, r.FullName })
-                .ToListAsync();
+                 .ToListAsync();
             return Ok(roles);
         }
 
@@ -52,31 +53,47 @@ namespace API.Controllers
         {
             var currentYear = DateTime.UtcNow.Year;
 
-            var employees = await _context.Users
-                    .Where(u => u.Role.Name == "Employee")
-                     .Select(u => new EmployeeListDto
-                     {
-                         Id = u.Id,
-                         PayRollNumber = u.PayRollNumber,
-                         FullName = u.FullName,
-                         RoleId = u.RoleId,
-                         ManagerId = u.EmployeeProfile!.ManagerId,
-                         HireDate = u.EmployeeProfile!.HireDate,
-                         Department = u.EmployeeProfile != null && u.EmployeeProfile.Department != null
-                        ? u.EmployeeProfile.Department.Name
-                        : "Sin departamento",
+            try
+            {
+                var employees = await _context.Users
+                    .Include(u => u.Role)
+                    .Include(u => u.EmployeeProfile)
+                    .Include(u => u.VacationBalances)
+                    .Where(u => u.Role.Name != "SuperAdmin")
+                    .Select(u => new EmployeeListDto
+                    {
+                        Id = u.Id,
+                        PayRollNumber = u.PayRollNumber,
+                        FullName = u.FullName,
+                        RoleId = u.RoleId,
+                        RoleName = u.Role != null ? u.Role.Name : "Sin Rol",
 
-                         YearsOfService = u.EmployeeProfile != null && u.EmployeeProfile.HireDate != null
-                        ? currentYear - u.EmployeeProfile.HireDate.Year
-                        : 0,
+                        ManagerId = u.EmployeeProfile != null ? u.EmployeeProfile.ManagerId : null,
 
-                         TotalVacationDays = u.VacationBalances
-                            .Sum(v => (decimal)(v.AssignedDays - v.UsedDays)),
-                         IsActive = u.IsActive
-                     })
+                        HireDate = u.EmployeeProfile != null ? u.EmployeeProfile.HireDate : (DateTime?)null,
+
+                        Department = (u.EmployeeProfile != null && u.EmployeeProfile.Department != null)
+                            ? u.EmployeeProfile.Department.Name
+                            : "Sin departamento",
+
+                        YearsOfService = (u.EmployeeProfile != null && u.EmployeeProfile.HireDate != DateTime.MinValue)
+                            ? currentYear - u.EmployeeProfile.HireDate!.Value.Year
+                            : 0,
+
+                        TotalVacationDays = u.VacationBalances != null && u.VacationBalances.Any()
+                            ? u.VacationBalances.Sum(v => (decimal)(v.AssignedDays - v.UsedDays))
+                            : 0,
+
+                        IsActive = u.IsActive
+                    })
                     .ToListAsync();
 
-            return Ok(employees);
+                return Ok(employees);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error interno", detail = ex.Message });
+            }
         }
 
         [HttpGet]
@@ -100,13 +117,13 @@ namespace API.Controllers
                     Id = x.M.Id,
                     PayRollNumber = x.M.PayRollNumber,
                     FullName = x.M.FullName,
-                    Email = x.M.Email,
+                    Email = x.M.Email ?? "",
                     RoleId = x.M.RoleId,
                     RoleName = x.M.Role.Name,
-                    Department = x.M.Department.Name,
+                    Department = x.M.Department.Name,                    
                     DepartmentId = x.M.DepartmentId,
                     YearsOfService = x.U != null && x.U.EmployeeProfile != null
-                        ? currentYear - x.U.EmployeeProfile.HireDate.Year
+                        ? currentYear - x.U.EmployeeProfile.HireDate!.Value.Year
                         : 0,
                     HireDate = x.U != null && x.U.EmployeeProfile != null
                         ? x.U.EmployeeProfile.HireDate
