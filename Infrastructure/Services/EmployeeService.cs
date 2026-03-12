@@ -60,57 +60,86 @@ namespace Infrastructure.Services
 
         public async Task<int> CreateEmployeeAsync(CreateEmployeeDto dto)
         {
-            if(await _context.Users.AnyAsync(u => u.PayRollNumber == dto.PayRollNumber))
+            if (await _context.Users.AnyAsync(u => u.PayRollNumber == dto.PayRollNumber))
             {
-                throw new Exception($"El número de nómina {dto.PayRollNumber} ya esta registrado");
+                throw new Exception($"El número de nómina {dto.PayRollNumber} ya está registrado");
             }
 
-            var user = new User
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                PayRollNumber = dto.PayRollNumber,
-                FullName = dto.FullName.Trim(),
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.PayRollNumber.ToString()),
-                RoleId = 2,
-                MustChangePassword = true,
-                IsActive = true,
-            };
+                var user = new User
+                {
+                    PayRollNumber = dto.PayRollNumber,
+                    FullName = dto.FullName.Trim(),
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.PayRollNumber.ToString()),
+                    RoleId = (dto.RoleId.HasValue && dto.RoleId.Value > 0) ? dto.RoleId.Value : 2,
+                    MustChangePassword = true,
+                    IsActive = true,
+                    Email = dto.Email
+                };
 
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
+                _context.Users.Add(user);
+                await _context.SaveChangesAsync();
 
-            var department = await _context.Departments.FirstOrDefaultAsync(d => d.Name == dto.Department)
-                        ?? new Department { Name = dto.Department, IsActive = true };
+                var department = await _context.Departments.FirstOrDefaultAsync(d => d.Name == dto.Department)
+                                ?? new Department { Name = dto.Department, IsActive = true };
 
-            var profile = new EmployeeProfile
+                if (department.Id == 0)
+                {
+                    _context.Departments.Add(department);
+                    await _context.SaveChangesAsync();
+                }
+
+                var profile = new EmployeeProfile
+                {
+                    UserId = user.Id,
+                    DepartmentId = department.Id,
+                    HireDate = dto.HireDate,
+                    ManagerId = dto.ManagerId > 0 ? dto.ManagerId : null
+                };
+                _context.EmployeeProfiles.Add(profile);
+
+                var authorityRoles = new List<int> { 3, 4 };
+                if (authorityRoles.Contains(user.RoleId))
+                {
+                    _context.Managers.Add(new Manager
+                    {
+                        PayRollNumber = user.PayRollNumber,
+                        FullName = user.FullName,
+                        Email = string.IsNullOrWhiteSpace(user.Email) ? null : user.Email,
+                        DepartmentId = department.Id,
+                        RoleId = user.RoleId,
+                        IsActive = true
+                    });
+                }
+
+                var today = DateTime.Today;
+                int yearsOfService = today.Year - dto.HireDate.Year;
+                if (dto.HireDate.Date > today.AddYears(-yearsOfService)) yearsOfService--;
+
+                int assignedDays = CalculateVacationDays(yearsOfService);
+
+                var initialBalance = new VacationBalance
+                {
+                    UserId = user.Id,
+                    Year = today.Year,
+                    AssignedDays = assignedDays,
+                    UsedDays = 0,
+                };
+
+                _context.VacationBalances.Add(initialBalance);
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return user.Id;
+            }
+            catch (Exception)
             {
-                UserId = user.Id,
-                Department = department,
-                HireDate = dto.HireDate,
-                ManagerId = dto.ManagerId,
-            };
-
-            _context.EmployeeProfiles.Add(profile);
-
-            var today = DateTime.Today;
-
-            int yearsOfService = today.Year - dto.HireDate.Year;
-            if (dto.HireDate.Date > today.AddYears(-yearsOfService)) yearsOfService--;
-
-            int assignedDays = CalculateVacationDays(yearsOfService);
-
-            var initialBalance = new VacationBalance
-            {
-                UserId = user.Id,
-                Year = today.Year,
-                AssignedDays = assignedDays,
-                UsedDays = 0,
-            };
-
-            _context.VacationBalances.Add(initialBalance);
-
-            await _context.SaveChangesAsync();
-
-            return user.Id;
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<bool> UpdateEmployeeAsync(UpdateEmployeeDto dto)
@@ -138,7 +167,6 @@ namespace Infrastructure.Services
                 if (dto.RoleId.HasValue && dto.RoleId.Value != oldRoleId)
                 {
                     user.RoleId = dto.RoleId.Value;
-
                     var authorityRoles = new List<int> { 3, 4 };
                     bool isNowAuthority = authorityRoles.Contains(dto.RoleId.Value);
                     bool wasAuthority = authorityRoles.Contains(oldRoleId);
@@ -147,11 +175,6 @@ namespace Infrastructure.Services
                     {
                         var managerEntry = await _context.Managers
                             .FirstOrDefaultAsync(m => m.PayRollNumber == user.PayRollNumber);
-
-                        if (string.IsNullOrEmpty(user.Email))
-                        {
-                            throw new Exception("El empleado debe tener un correo electrónico configurado para ser asignado como Jefe/Gerente.");
-                        }
 
                         if (managerEntry == null)
                         {
@@ -173,46 +196,33 @@ namespace Infrastructure.Services
                     }
                     else if (wasAuthority && !isNowAuthority)
                     {
-                        var managerEntry = await _context.Managers
-                            .FirstOrDefaultAsync(m => m.PayRollNumber == user.PayRollNumber);
-
-                        if (managerEntry != null)
-                        {
-                            _context.Managers.Remove(managerEntry);
-                        }
+                        var managerEntry = await _context.Managers.FirstOrDefaultAsync(m => m.PayRollNumber == user.PayRollNumber);
+                        if (managerEntry != null) _context.Managers.Remove(managerEntry);
                     }
                 }
 
-                if(user.EmployeeProfile != null)
-                {
-                    user.EmployeeProfile.ManagerId = dto.ManagerId;
-                }
+                if (!string.IsNullOrWhiteSpace(dto.FullName)) user.FullName = dto.FullName.Trim();
+                if (dto.IsActive.HasValue) user.IsActive = dto.IsActive.Value;
 
-                if (!string.IsNullOrWhiteSpace(dto.FullName))
-                    user.FullName = dto.FullName.Trim();
-
-                if (dto.IsActive.HasValue)
-                    user.IsActive = dto.IsActive.Value;
-
-                if (!string.IsNullOrWhiteSpace(dto.Department) || dto.HireDate.HasValue)
+                if (!string.IsNullOrWhiteSpace(dto.Department) || dto.HireDate.HasValue || dto.ManagerId.HasValue)
                 {
                     if (user.EmployeeProfile == null)
                     {
-                        user.EmployeeProfile = new EmployeeProfile { UserId = user.Id };
+                        user.EmployeeProfile = new EmployeeProfile { UserId = user.Id, HireDate = dto.HireDate ?? DateTime.Today };
                         _context.EmployeeProfiles.Add(user.EmployeeProfile);
                     }
+
+                    user.EmployeeProfile.ManagerId = dto.ManagerId;
 
                     if (!string.IsNullOrWhiteSpace(dto.Department))
                     {
                         var dept = await _context.Departments.FirstOrDefaultAsync(d => d.Name == dto.Department);
-
                         if (dept == null)
                         {
                             dept = new Department { Name = dto.Department, IsActive = true };
                             _context.Departments.Add(dept);
                             await _context.SaveChangesAsync();
                         }
-
                         user.EmployeeProfile.DepartmentId = dept.Id;
                     }
 
@@ -222,20 +232,13 @@ namespace Infrastructure.Services
                     }
                 }
 
-                if (dto.Balances != null && dto.Balances.Any())
+                if (dto.Balances != null)
                 {
                     foreach (var bDto in dto.Balances)
                     {
                         var existing = user.VacationBalances.FirstOrDefault(b => b.Year == bDto.Year);
-                        if (existing != null)
-                            existing.AssignedDays = bDto.AssignedDays;
-                        else
-                            user.VacationBalances.Add(new VacationBalance
-                            {
-                                Year = bDto.Year,
-                                AssignedDays = bDto.AssignedDays,
-                                UserId = user.Id
-                            });
+                        if (existing != null) existing.AssignedDays = bDto.AssignedDays;
+                        else user.VacationBalances.Add(new VacationBalance { Year = bDto.Year, AssignedDays = bDto.AssignedDays, UserId = user.Id });
                     }
                 }
 
@@ -243,9 +246,9 @@ namespace Infrastructure.Services
                 await transaction.CommitAsync();
                 return true;
             }
-            catch(Exception ex)
+            catch (Exception)
             {
-                await transaction.RollbackAsync(); 
+                await transaction.RollbackAsync();
                 throw;
             }
         }
