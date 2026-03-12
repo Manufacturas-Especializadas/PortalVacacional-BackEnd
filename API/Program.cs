@@ -1,5 +1,6 @@
 using Application.Features.Admin;
 using Application.Features.Email;
+using Application.Features.Email.Dtos;
 using Application.Features.Security;
 using Infrastructure.Data;
 using Infrastructure.Security;
@@ -67,6 +68,7 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
 builder.Services.AddScoped<IEmployeeImportService, EmployeeImportService>();
 builder.Services.AddScoped<ITokenService, JwTokenService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
