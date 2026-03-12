@@ -18,9 +18,11 @@ namespace Application.Features.GetEmployees
 
         public int RoleId { get; set; }
 
+        public string RoleName { get; set; } = null!;
+
         public int? ManagerId { get; set; }
 
-        public DateTime HireDate { get; set; }
+        public DateTime? HireDate { get; set; }
 
         public int YearsOfService { get; set; }
 
