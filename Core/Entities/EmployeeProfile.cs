@@ -14,7 +14,7 @@ namespace Core.Entities
 
         public int DepartmentId { get; set; }
 
-        public DateTime HireDate { get; set; }
+        public DateTime? HireDate { get; set; }
 
         public int? ManagerId { get; set; }
 
