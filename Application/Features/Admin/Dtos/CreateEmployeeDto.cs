@@ -14,7 +14,11 @@ namespace Application.Features.Admin.Dtos
 
         public string Department { get; set; }
 
+        public string Email { get; set; }
+
         public int? ManagerId { get; set; }
+
+        public int? RoleId { get; set; }
 
         public DateTime HireDate { get; set; }
 
