@@ -280,56 +280,74 @@ namespace Infrastructure.Services
 
         public async Task<bool> RequestVacationAsync(int userId, CreateVacationRequestDto dto)
         {
-            var employee = await _context.Users
-                    .Include(u => u.EmployeeProfile)
-                    .ThenInclude(p => p.Manager)
-                    .FirstOrDefaultAsync(u => u.Id == userId);
-
-            if (employee?.EmployeeProfile?.Manager == null)
-                throw new Exception("No se encontró un jefe directo asignado");
-
-            var balance = await _context.VacationBalances
-                        .Where(b => b.UserId == userId && b.Year == DateTime.Now.Year)
-                        .FirstOrDefaultAsync();
-
-            if (balance == null || (balance.AssignedDays - balance.UsedDays) < dto.RequestedDays)
-                throw new Exception("Días insuficientes en el balance");
-
-            var request = new VacationRequest
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                UserId = userId,
-                StartDate = dto.StartDate,
-                EndDate = dto.EndDate,
-                RequestedDays = dto.RequestedDays,
-                StatusId = 1
-            };
+                var employee = await _context.Users
+                        .Include(u => u.EmployeeProfile)
+                        .FirstOrDefaultAsync(u => u.Id == userId);
 
-            _context.VacationRequests.Add(request);
-            await _context.SaveChangesAsync();
+                if (employee?.EmployeeProfile == null || !employee.EmployeeProfile.ManagerId.HasValue)
+                    throw new Exception("No se encontró un jefe directo asignado en el perfil.");
 
-            var approvel = new VacationRequestApproval
+                var manager = await _context.Managers
+                        .FirstOrDefaultAsync(m => m.Id == employee.EmployeeProfile.ManagerId);
+
+                if (manager == null)
+                    throw new Exception("El jefe asignado no existe en el catálogo de Managers.");
+
+                var balance = await _context.VacationBalances
+                            .Where(b => b.UserId == userId && b.Year == DateTime.Now.Year)
+                            .FirstOrDefaultAsync();
+
+                if (balance == null || (balance.AssignedDays - balance.UsedDays) < dto.RequestedDays)
+                    throw new Exception("Días insuficientes en el balance actual.");
+
+                var request = new VacationRequest
+                {
+                    UserId = userId,
+                    StartDate = dto.StartDate,
+                    EndDate = dto.EndDate,
+                    RequestedDays = dto.RequestedDays,
+                    StatusId = 1,
+                    CreatedAt = DateTime.Now
+                };
+
+                _context.VacationRequests.Add(request);
+                await _context.SaveChangesAsync();
+
+                var approval = new VacationRequestApproval
+                {
+                    VacationRequestId = request.Id,                    
+                    ApproverId = manager.Id,
+                    ApprovalLevel = 1,
+                    StatusId = 1
+                };
+
+                _context.VacationRequestApprovals.Add(approval);
+
+                await _context.SaveChangesAsync();
+
+                await transaction.CommitAsync();
+
+                if (!string.IsNullOrEmpty(manager.Email))
+                {
+                    await NotifyManager(manager.Email, manager.FullName, employee.FullName, dto);
+                }
+
+                return true;
+            }
+            catch (DbUpdateException ex)
             {
-                VacationRequestId = request.Id,
-                ApproverId = employee.EmployeeProfile.ManagerId!.Value,
-                ApprovalLevel = 1,
-                StatusId = 1
-            };
-
-            _context.VacationRequestApprovals.Add(approvel);
-            await _context.SaveChangesAsync();
-
-            string subject = "Nueva Solicitud de Vacaciones - MESA";
-
-            string body = $@"
-            <h3>Hola, {employee.EmployeeProfile.Manager.FullName}</h3>
-            <p>El colaborador <b>{employee.FullName}</b> ha solicitado <b>{dto.RequestedDays}</b> días de vacaciones.</p>
-            <p>Periodo: del {dto.StartDate:dd/MM/yyyy} al {dto.EndDate:dd/MM/yyyy}.</p>
-            <br>
-            <a href='https://tuportal.mesa.com/aprobaciones'>Haga clic aquí para revisar y autorizar</a>";
-
-            await _emailService.SendEmailAsync(new[] { employee.EmployeeProfile.Manager.Email }!, subject, body);
-
-            return true;
+                await transaction.RollbackAsync();
+                var innerMessage = ex.InnerException?.Message ?? ex.Message;
+                throw new Exception($"Error de base de datos: {innerMessage}");
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         private int CalculateVacationDays(int years)
@@ -344,6 +362,31 @@ namespace Infrastructure.Services
             int fivePeriod = (int)Math.Floor((years - 1) / 5.0);
 
             return 20 + (fivePeriod * 2);
+        }
+
+        private async Task NotifyManager(string managerEmail, string managerName, string employeeName, CreateVacationRequestDto dto)
+        {
+            string subject = $"MESA - Nueva Solicitud de Vacaciones: {employeeName}";
+            string body = $@"
+                <div style='font-family: sans-serif; max-width: 600px; border: 1px solid #e2e8f0; padding: 25px; border-radius: 15px;'>
+                    <h2 style='color: #1e40af;'>Hola, {managerName}</h2>
+                    <p style='font-size: 16px;'>Tienes una nueva solicitud de vacaciones pendiente de revisar en el portal.</p>
+                    <div style='background-color: #f8fafc; padding: 15px; border-radius: 10px; border-left: 5px solid #3b82f6;'>
+                        <p style='margin: 5px 0;'><b>Colaborador:</b> {employeeName}</p>
+                        <p style='margin: 5px 0;'><b>Periodo:</b> {dto.StartDate:dd/MM/yyyy} al {dto.EndDate:dd/MM/yyyy}</p>
+                        <p style='margin: 5px 0;'><b>Días totales:</b> {dto.RequestedDays} días</p>
+                    </div>
+                    <br>
+                    <div style='text-align: center;'>
+                        <a href='https://tuportal.mesa.com/approvals' 
+                           style='background-color: #2563eb; color: white; padding: 12px 25px; text-decoration: none; border-radius: 8px; font-weight: bold;'>
+                           Revisar en el Portal
+                        </a>
+                    </div>
+                    <p style='font-size: 12px; color: #94a3b8; margin-top: 25px;'>Este es un mensaje automático generado por el sistema MESA.</p>
+                </div>";
+
+            await _emailService.SendEmailAsync(new[] { managerEmail }, subject, body);
         }
     }
 }
