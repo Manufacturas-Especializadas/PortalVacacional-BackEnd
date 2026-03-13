@@ -101,65 +101,6 @@ namespace Infrastructure.Data
 
             modelBuilder.Entity<VacationRequest>(entity =>
             {
-                entity.Property(v => v.StartDate)
-                    .HasColumnName("startDate");
-
-                entity.Property(v => v.EndDate)
-                    .HasColumnName("endDate");
-
-                entity.Property(v => v.RequestedDays)
-                    .HasColumnName("requestedDays");
-
-                entity.Property(v => v.StatusId)
-                    .HasColumnName("statusId");
-
-                entity.Property(v => v.CreatedAt)
-                    .HasDefaultValueSql("GETDATE()")
-                    .ValueGeneratedOnAdd();
-
-                entity.HasOne(v => v.User)
-                .WithMany(u => u.VacationRequests)
-                .HasForeignKey(v => v.UserId)
-                .OnDelete(DeleteBehavior.Restrict);
-            });
-
-            modelBuilder.Entity<VacationRequestApproval>(entity =>
-            {
-                entity.Property(a => a.VacationRequestId)
-                    .HasColumnName("vacationRequestId");
-
-                entity.Property(a => a.ApproverId)
-                    .HasColumnName("approverId");
-
-                entity.Property(a => a.ApprovalLevel)
-                    .HasColumnName("approvalLevel");
-
-                entity.Property(a => a.StatusId)
-                    .HasColumnName("statusId");
-
-                entity.Property(a => a.Comments)
-                    .HasColumnName("comments");
-
-                entity.Property(a => a.DecisionDate)
-                    .HasColumnName("decisionDate");
-
-                entity.HasOne(a => a.Approver)
-                    .WithMany()
-                    .HasForeignKey(a => a.ApproverId)
-                    .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasOne(a => a.VacationRequest)
-                    .WithMany(r => r.Approvals)
-                    .HasForeignKey(a => a.VacationRequestId);
-
-                entity.HasOne(a => a.Approver)
-                    .WithMany()
-                    .HasForeignKey(a => a.ApproverId)
-                    .OnDelete(DeleteBehavior.Restrict);
-            });
-
-            modelBuilder.Entity<VacationRequest>(entity =>
-            {
                 entity.ToTable("VacationRequests");
 
                 entity.Property(v => v.StartDate).HasColumnName("startDate");
@@ -177,10 +118,34 @@ namespace Infrastructure.Data
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasOne(v => v.Status)
-                    .WithMany()
+                    .WithMany(s => s.VacationRequests)
                     .HasForeignKey(v => v.StatusId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
+
+            modelBuilder.Entity<VacationRequestApproval>(entity =>
+            {
+                entity.Property(a => a.VacationRequestId).HasColumnName("vacationRequestId");
+                entity.Property(a => a.ApproverId).HasColumnName("approverId");
+                entity.Property(a => a.ApprovalLevel).HasColumnName("approvalLevel");
+                entity.Property(a => a.StatusId).HasColumnName("statusId");
+                entity.Property(a => a.Comments).HasColumnName("comments");
+                entity.Property(a => a.DecisionDate).HasColumnName("decisionDate");
+
+                entity.HasOne(a => a.Status)
+                    .WithMany(s => s.VacationRequestApprovals)
+                    .HasForeignKey(a => a.StatusId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(a => a.Approver)
+                    .WithMany()
+                    .HasForeignKey(a => a.ApproverId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(a => a.VacationRequest)
+                    .WithMany(r => r.Approvals)
+                    .HasForeignKey(a => a.VacationRequestId);
+            });           
 
             modelBuilder.Entity<ImportLog>(entity =>
             {
