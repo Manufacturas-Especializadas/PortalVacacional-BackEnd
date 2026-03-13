@@ -1,6 +1,7 @@
 using Application.Features.Admin;
 using Application.Features.Email;
 using Application.Features.Email.Dtos;
+using Application.Features.Employee;
 using Application.Features.Security;
 using Infrastructure.Data;
 using Infrastructure.Security;
@@ -105,6 +106,7 @@ builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Emai
 builder.Services.AddScoped<IEmployeeImportService, EmployeeImportService>();
 builder.Services.AddScoped<ITokenService, JwTokenService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IVacationService, VacationService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddAuthorization();
 
