@@ -16,6 +16,14 @@ namespace Application.Features.GetEmployees
 
         public string Department {  get; set; }
 
+        public int RoleId { get; set; }
+
+        public string RoleName { get; set; } = null!;
+
+        public int? ManagerId { get; set; }
+
+        public DateTime? HireDate { get; set; }
+
         public int YearsOfService { get; set; }
 
         public decimal TotalVacationDays { get; set; }

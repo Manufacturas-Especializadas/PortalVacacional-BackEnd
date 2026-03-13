@@ -18,6 +18,8 @@ namespace Infrastructure.Data
 
         public DbSet<User> Users => Set<User>();
 
+        public DbSet<Manager> Managers => Set<Manager>();
+
         public DbSet<Department> Departments => Set<Department>();
 
         public DbSet<EmployeeProfile> EmployeeProfiles => Set<EmployeeProfile>();
@@ -43,18 +45,30 @@ namespace Infrastructure.Data
                     .ValueGeneratedOnAdd();
             });
 
+            modelBuilder.Entity<Manager>(entity =>
+            {
+                entity.ToTable("Managers");
+                entity.HasIndex(m => m.PayRollNumber).IsUnique();
+                entity.HasIndex(m => m.Email).IsUnique();
+
+                entity.Property(m => m.CreatedAt)
+                    .HasDefaultValueSql("GETDATE()")
+                    .ValueGeneratedOnAdd();
+
+                entity.HasOne(m => m.Department)
+                    .WithMany()
+                    .HasForeignKey(m => m.DepartmentId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Role)
+                   .WithMany()
+                   .HasForeignKey(e => e.RoleId)
+                   .OnDelete(DeleteBehavior.Restrict);
+            });
+
             modelBuilder.Entity<EmployeeProfile>(entity =>
             {
                 entity.ToTable("EmployeeProfiles");
-
-                entity.Property(e => e.DepartmentId)
-                    .HasColumnName("departmentId");
-
-                entity.Property(e => e.HireDate)
-                    .HasColumnName("hireDate");
-
-                entity.Property(e => e.ManagerId)
-                    .HasColumnName("ManagerId");
 
                 entity.HasOne(e => e.User)
                     .WithOne(u => u.EmployeeProfile)
@@ -87,60 +101,6 @@ namespace Infrastructure.Data
 
             modelBuilder.Entity<VacationRequest>(entity =>
             {
-                entity.Property(v => v.StartDate)
-                    .HasColumnName("startDate");
-
-                entity.Property(v => v.EndDate)
-                    .HasColumnName("endDate");
-
-                entity.Property(v => v.RequestedDays)
-                    .HasColumnName("requestedDays");
-
-                entity.Property(v => v.StatusId)
-                    .HasColumnName("statusId");
-
-                entity.Property(v => v.CreatedAt)
-                    .HasDefaultValueSql("GETDATE()")
-                    .ValueGeneratedOnAdd();
-
-                entity.HasOne(v => v.User)
-                .WithMany(u => u.VacationRequests)
-                .HasForeignKey(v => v.UserId)
-                .OnDelete(DeleteBehavior.Restrict);
-            });
-
-            modelBuilder.Entity<VacationRequestApproval>(entity =>
-            {
-                entity.Property(a => a.VacationRequestId)
-                    .HasColumnName("vacationRequestId");
-
-                entity.Property(a => a.ApproverId)
-                    .HasColumnName("approverId");
-
-                entity.Property(a => a.ApprovalLevel)
-                    .HasColumnName("approvalLevel");
-
-                entity.Property(a => a.StatusId)
-                    .HasColumnName("statusId");
-
-                entity.Property(a => a.Comments)
-                    .HasColumnName("comments");
-
-                entity.Property(a => a.DecisionDate)
-                    .HasColumnName("decisionDate");
-
-                entity.HasOne(a => a.VacationRequest)
-                    .WithMany(r => r.Approvals)
-                    .HasForeignKey(a => a.VacationRequestId);
-
-                entity.HasOne(a => a.Approver)
-                    .WithMany()
-                    .HasForeignKey(a => a.ApproverId)
-                    .OnDelete(DeleteBehavior.Restrict);
-            });
-
-            modelBuilder.Entity<VacationRequest>(entity =>
-            {
                 entity.ToTable("VacationRequests");
 
                 entity.Property(v => v.StartDate).HasColumnName("startDate");
@@ -158,10 +118,34 @@ namespace Infrastructure.Data
                     .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasOne(v => v.Status)
-                    .WithMany()
+                    .WithMany(s => s.VacationRequests)
                     .HasForeignKey(v => v.StatusId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
+
+            modelBuilder.Entity<VacationRequestApproval>(entity =>
+            {
+                entity.Property(a => a.VacationRequestId).HasColumnName("vacationRequestId");
+                entity.Property(a => a.ApproverId).HasColumnName("approverId");
+                entity.Property(a => a.ApprovalLevel).HasColumnName("approvalLevel");
+                entity.Property(a => a.StatusId).HasColumnName("statusId");
+                entity.Property(a => a.Comments).HasColumnName("comments");
+                entity.Property(a => a.DecisionDate).HasColumnName("decisionDate");
+
+                entity.HasOne(a => a.Status)
+                    .WithMany(s => s.VacationRequestApprovals)
+                    .HasForeignKey(a => a.StatusId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(a => a.Approver)
+                    .WithMany()
+                    .HasForeignKey(a => a.ApproverId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(a => a.VacationRequest)
+                    .WithMany(r => r.Approvals)
+                    .HasForeignKey(a => a.VacationRequestId);
+            });           
 
             modelBuilder.Entity<ImportLog>(entity =>
             {

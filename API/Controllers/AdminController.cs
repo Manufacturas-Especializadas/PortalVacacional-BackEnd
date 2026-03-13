@@ -1,9 +1,11 @@
 ﻿using Application.Features.Admin;
 using Application.Features.Admin.Dtos;
 using Application.Features.GetEmployees;
+using Application.Features.Managers.Dtos;
 using Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Threading.Tasks.Sources;
 
 namespace API.Controllers
 {
@@ -25,6 +27,117 @@ namespace API.Controllers
             _context = context;
         }
 
+        [HttpGet]
+        [Route("roles")]
+        public async Task<IActionResult> GetRoles()
+        {
+            var roles = await _context.Roles
+                .Select(r => new { r.Id, r.Name })
+                .ToListAsync();
+            return Ok(roles);
+        }
+
+        [HttpGet]
+        [Route("managersSelect")]
+        public async Task<IActionResult> GetManagersSelect()
+        {
+            var roles = await _context.Managers
+                .Select(r => new { r.Id, r.FullName })
+                 .ToListAsync();
+            return Ok(roles);
+        }
+
+        [HttpGet]
+        [Route("employees")]
+        public async Task<IActionResult> GetEmployees()
+        {
+            var currentYear = DateTime.UtcNow.Year;
+
+            try
+            {
+                var employees = await _context.Users
+                    .Include(u => u.Role)
+                    .Include(u => u.EmployeeProfile)
+                    .Include(u => u.VacationBalances)
+                    .Where(u => u.Role.Name != "SuperAdmin")
+                    .Select(u => new EmployeeListDto
+                    {
+                        Id = u.Id,
+                        PayRollNumber = u.PayRollNumber,
+                        FullName = u.FullName,
+                        RoleId = u.RoleId,
+                        RoleName = u.Role != null ? u.Role.Name : "Sin Rol",
+
+                        ManagerId = u.EmployeeProfile != null ? u.EmployeeProfile.ManagerId : null,
+
+                        HireDate = u.EmployeeProfile != null ? u.EmployeeProfile.HireDate : (DateTime?)null,
+
+                        Department = (u.EmployeeProfile != null && u.EmployeeProfile.Department != null)
+                            ? u.EmployeeProfile.Department.Name
+                            : "Sin departamento",
+
+                        YearsOfService = (u.EmployeeProfile != null && u.EmployeeProfile.HireDate != DateTime.MinValue)
+                            ? currentYear - u.EmployeeProfile.HireDate!.Value.Year
+                            : 0,
+
+                        TotalVacationDays = u.VacationBalances != null && u.VacationBalances.Any()
+                            ? u.VacationBalances.Sum(v => (decimal)(v.AssignedDays - v.UsedDays))
+                            : 0,
+
+                        IsActive = u.IsActive
+                    })
+                    .ToListAsync();
+
+                return Ok(employees);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error interno", detail = ex.Message });
+            }
+        }
+
+        [HttpGet]
+        [Route("departmentHead-managers")]
+        public async Task<IActionResult> GetManagers()
+        {
+            var currentYear = DateTime.UtcNow.Year;
+
+            var managers = await _context.Managers
+                .Include(m => m.Role)
+                .Include(m => m.Department)
+                .Select(m => new {
+                    M = m,
+                    U = _context.Users
+                        .Include(u => u.EmployeeProfile)
+                        .Include(u => u.VacationBalances)
+                        .FirstOrDefault(u => u.PayRollNumber == m.PayRollNumber)
+                })
+                .Select(x => new
+                {
+                    Id = x.M.Id,
+                    PayRollNumber = x.M.PayRollNumber,
+                    FullName = x.M.FullName,
+                    Email = x.M.Email ?? "",
+                    RoleId = x.M.RoleId,
+                    RoleName = x.M.Role.Name,
+                    Department = x.M.Department.Name,                    
+                    DepartmentId = x.M.DepartmentId,
+                    YearsOfService = x.U != null && x.U.EmployeeProfile != null
+                        ? currentYear - x.U.EmployeeProfile.HireDate!.Value.Year
+                        : 0,
+                    HireDate = x.U != null && x.U.EmployeeProfile != null
+                        ? x.U.EmployeeProfile.HireDate
+                        : (DateTime?)null,
+                    TotalVacationDays = x.U != null
+                        ? x.U.VacationBalances.Sum(v => v.AssignedDays - v.UsedDays)
+                        : 0,
+                    IsActive = x.M.IsActive
+                })
+                .ToListAsync();
+
+            return Ok(managers);
+        }
+
         [HttpPost]
         [Route("createEmployees")]
         public async Task<IActionResult> CreateEmployee([FromBody] CreateEmployeeDto dto)
@@ -39,6 +152,30 @@ namespace API.Controllers
             catch(Exception ex)
             {
                 return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        [Route("import-employees")]
+        public async Task<IActionResult> ImportEmployees(IFormFile file)
+        {
+            try
+            {
+                if (file == null || file.Length == 0)
+                    return BadRequest("Invalid file");
+
+                using var stream = file.OpenReadStream();
+
+                var result = await _importService.ImportAsync(stream, 2);
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    message = ex.InnerException?.Message ?? ex.Message
+                });
             }
         }
 
@@ -66,16 +203,6 @@ namespace API.Controllers
             }
         }
 
-        [HttpDelete]
-        [Route("deleteEmployees/{id}")]
-        public async Task<IActionResult> DeleteEmployee(int id)
-        {
-            var success = await _employeeService.DeleteEmployeeAsync(id);
-            if (!success) return NotFound();
-
-            return Ok(new { message = "Empleado desactivado del sistema" });
-        }
-
         [HttpPatch]
         [Route("reactivateEmployee/{id}")]
         public async Task<IActionResult> ReactivateEmployee(int id)
@@ -84,15 +211,15 @@ namespace API.Controllers
             {
                 var success = await _employeeService.ReactivateEmployeeAsync(id);
 
-                if(!success) return NotFound(new 
-                    { message = "No se encontro el colaborador para reactivar" });
+                if (!success) return NotFound(new
+                { message = "No se encontro el colaborador para reactivar" });
 
                 return Ok(new
                 {
                     message = "Colaborador reactivado correctamente"
                 });
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 return BadRequest(new
                 {
@@ -101,58 +228,14 @@ namespace API.Controllers
             }
         }
 
-        [HttpGet]
-        [Route("employees")]
-        public async Task<IActionResult> GetEmployees()
+        [HttpDelete]
+        [Route("deleteEmployees/{id}")]
+        public async Task<IActionResult> DeleteEmployee(int id)
         {
-            var currentYear = DateTime.UtcNow.Year;
+            var success = await _employeeService.DeleteEmployeeAsync(id);
+            if (!success) return NotFound();
 
-            var employees = await _context.Users
-                    .Where(u => u.Role.Name == "Employee")
-                     .Select(u => new EmployeeListDto
-                     {
-                         Id = u.Id,
-                         PayRollNumber = u.PayRollNumber,
-                         FullName = u.FullName,
-                         Department = u.EmployeeProfile != null && u.EmployeeProfile.Department != null
-                        ? u.EmployeeProfile.Department.Name
-                        : "Sin departamento",
-
-                                 YearsOfService = u.EmployeeProfile != null && u.EmployeeProfile.HireDate != null
-                        ? currentYear - u.EmployeeProfile.HireDate.Year
-                        : 0,
-
-                         TotalVacationDays = u.VacationBalances
-                            .Sum(v => (decimal)(v.AssignedDays - v.UsedDays)),
-                         IsActive = u.IsActive
-                     })
-                    .ToListAsync();
-
-            return Ok(employees);
-        }
-
-        [HttpPost]
-        [Route("import-employees")]
-        public async Task<IActionResult> ImportEmployees(IFormFile file)
-        {
-            try
-            {
-                if (file == null || file.Length == 0)
-                    return BadRequest("Invalid file");
-
-                using var stream = file.OpenReadStream();
-
-                var result = await _importService.ImportAsync(stream, 2);
-
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new
-                {
-                    message = ex.InnerException?.Message ?? ex.Message
-                });
-            }
-        }
+            return Ok(new { message = "Empleado desactivado del sistema" });
+        }                        
     }
 }

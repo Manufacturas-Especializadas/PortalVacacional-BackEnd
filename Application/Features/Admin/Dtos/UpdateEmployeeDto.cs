@@ -16,9 +16,13 @@ namespace Application.Features.Admin.Dtos
 
         public string? Department { get; set; }
 
+        public int? ManagerId { get; set; }
+
         public DateTime? HireDate { get; set; }
 
         public bool? IsActive { get; set; }
+
+        public int? RoleId { get; set; }
 
         public List<VacationBalanceDto>? Balances { get; set; }
     }

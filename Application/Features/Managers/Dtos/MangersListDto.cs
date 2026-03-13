@@ -4,25 +4,26 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Application.Features.Admin.Dtos
+namespace Application.Features.Managers.Dtos
 {
-    public class CreateEmployeeDto
+    public class MangersListDto
     {
+        public int Id { get; set; }
+
         public int PayRollNumber { get; set; }
 
         public string FullName { get; set; }
 
         public string Department { get; set; }
 
-        public string Email { get; set; }
-
-        public int? ManagerId { get; set; }
-
-        public int? RoleId { get; set; }
+        public int RoleId { get; set; }
 
         public DateTime HireDate { get; set; }
 
-        public List<VacationBalanceDto>? Balances { get; set; } = new();
+        public int YearsOfService { get; set; }
 
+        public decimal TotalVacationDays { get; set; }
+
+        public bool IsActive { get; set; }
     }
 }

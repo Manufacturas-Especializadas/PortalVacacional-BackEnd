@@ -13,5 +13,7 @@ namespace Core.Entities
         public string Name { get; set; }
 
         public ICollection<VacationRequest> VacationRequests { get; set; } = new List<VacationRequest>();
+
+        public ICollection<VacationRequestApproval> VacationRequestApprovals { get; set; } = new List<VacationRequestApproval>();
     }
 }
